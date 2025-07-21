@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My AI Friend (Push-to-Talk & Memory)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Minimalist styling for a clean speech-only interface */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #282c34; /* Dark background */
+            color: #ffffff; /* White text */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Hide scrollbars if any */
+            flex-direction: column; /* Allow content to stack */
+            padding: 1rem;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            width: 100%;
+            max-width: 600px; /* Constrain width */
+            text-align: center;
+        }
+
+        .mic-container {
+            margin-top: 2rem;
+        }
+
+        .mic-button {
+            background: #61dafb; /* Light blue */
+            color: #282c34;
+            border: none;
+            border-radius: 50%; /* Circular button */
+            width: 100px;
+            height: 100px;
+            font-size: 3rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            flex-shrink: 0; /* Prevent shrinking on smaller screens */
+        }
+
+        .mic-button:hover:not(:disabled) {
+            background: #4fa3d1;
+            transform: scale(1.05);
+        }
+
+        .mic-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            animation: none; /* Stop pulse when disabled */
+        }
+
+        .mic-button.recording {
+            background: #ef4444; /* Red for recording */
+            animation: pulse 1s infinite;
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+        }
+
+        .mic-button.recording:hover:not(:disabled) {
+            background: #cc3333;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.9);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 20px rgba(239, 68, 68, 0);
+            }
+            100% {
+                transform: scale(0.9);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
+        }
+
+        .status-text {
+            margin-top: 1rem;
+            font-size: 1.2rem;
+            color: #cccccc;
+            min-height: 1.2rem; /* Reserve space to prevent layout shift */
+        }
+
+        .speech-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 0.5rem;
+            background: #3a3f4a;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            width: fit-content;
+            justify-content: center;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            box-sizing: border-box; /* Include padding in width calculation */
+        }
+
+        @media (max-width: 768px) {
+            .speech-controls {
+                width: 100%; /* Full width on smaller screens */
+            }
+        }
+
+        .speech-btn {
+            background: #10b981; /* Success color */
+            color: white;
+            border: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+
+        .speech-btn:hover:not(:disabled) {
+            background: #059669;
+        }
+
+        .speech-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .speech-btn.speaking {
+            background: #f59e0b; /* Warning color */
+            animation: pulse-speaking 1.5s infinite; /* Different pulse for speaking */
+        }
+
+        .speech-btn.speaking:hover {
+            background: #d97706;
+        }
+
+        @keyframes pulse-speaking {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: #ccc;
+            flex-shrink: 0;
+        }
+
+        .volume-slider {
+            width: 80px;
+            height: 4px;
+            -webkit-appearance: none; /* Override default */
+            appearance: none;
+            background: #555;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .volume-slider:hover {
+            opacity: 1;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #61dafb;
+            cursor: pointer;
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #61dafb;
+            cursor: pointer;
+        }
+
+        .voice-select {
+            background: #3a3f4a;
+            border: 1px solid #555;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            min-width: 120px;
+            flex-grow: 1; /* Allow to grow and take available space */
+            box-sizing: border-box;
+        }
+
+        /* Hide all unnecessary elements as per request */
+        .sidebar, .header, .input-container, .dialog-modal, .toast, .page-loader,
+        #user-input, #send-button, .chat-container, .loading-indicator,
+        #chat-history, #chat-history-list, .sidebar-overlay {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="speech-controls">
+        <button class="speech-btn" id="toggle-speech-output-btn" title="Toggle AI Voice Output">
+            <i class="fas fa-volume-up"></i> <span id="speech-output-status">AI Voice ON</span>
+        </button>
+        <div class="volume-control">
+            <i class="fas fa-volume-down"></i>
+            <input type="range" class="volume-slider" id="volume-slider" min="0" max="1" step="0.1" value="0.8">
+            <i class="fas fa-volume-up"></i>
+        </div>
+        <select class="voice-select" id="voice-select">
+            <option value="">Default Voice</option>
+        </select>
+        <button class="speech-btn" id="stop-ai-speech-btn" title="Stop AI Speech" style="background: #e74c3c; display: none;">
+            <i class="fas fa-stop"></i> Stop AI
+        </button>
+    </div>
+
+    <div class="main-content">
+        <h1>Your AI Friend</h1>
+        <p class="status-text" id="status-display">Long press the mic to talk!</p>
+
+        <div class="mic-container">
+            <button class="mic-button" id="mic-button" title="Long press to talk">
+                <i class="fas fa-microphone"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const micButton = document.getElementById("mic-button");
+        const statusDisplay = document.getElementById("status-display");
+        const toggleSpeechOutputBtn = document.getElementById("toggle-speech-output-btn");
+        const speechOutputStatus = document.getElementById("speech-output-status");
+        const volumeSlider = document.getElementById("volume-slider");
+        const voiceSelect = document.getElementById("voice-select");
+        const stopAiSpeechBtn = document.getElementById("stop-ai-speech-btn");
+
+        const serverUrl = "https://classmate1-ffw7.onrender.com"; // Your render server link
+
+        let recognition = null;
+        let isRecording = false; // Is mic actively listening?
+        let isSpeaking = false;  // Is AI actively speaking?
+        let speechOutputEnabled = true; // Overall toggle for AI voice output
+        let currentUtterance = null; // Reference to the current SpeechSynthesisUtterance
+        window._lastUserTranscript = ""; // Global variable to store transcript from onresult
+
+        // Store chat history (sender: "user" | "ai", content: "text")
+        // Limited to last 10 exchanges for prompt token efficiency
+        let chatHistory = []; 
+        const MAX_HISTORY_LENGTH = 10; 
+
+        // --- Speech Recognition Setup ---
+        if ("webkitSpeechRecognition" in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = false; // IMPORTANT: Not continuous, for push-to-talk
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            recognition.lang = "en-IN"; // Default to Indian English. Change to "te-IN" for Telugu.
+
+            recognition.onstart = () => {
+                isRecording = true;
+                micButton.classList.add("recording");
+                statusDisplay.textContent = "Listening...";
+                console.log("Speech recognition started.");
+                // Disable speech controls during recording
+                toggleSpeechOutputBtn.disabled = true;
+                volumeSlider.disabled = true;
+                voiceSelect.disabled = true;
+                stopAiSpeechBtn.disabled = true; // Can't stop AI if it's not speaking
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[event.results.length - 1][0].transcript;
+                console.log("User said:", transcript);
+                statusDisplay.textContent = `You said: "${transcript}"`; 
+                window._lastUserTranscript = transcript; // Store the transcript
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                let errorMessage = `Mic error: ${event.error}. Release and long press again.`;
+                if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                    errorMessage = "Microphone access denied. Please allow permissions for this site.";
+                    alert(errorMessage);
+                } else if (event.error === 'no-speech') {
+                    errorMessage = "Didn't hear anything. Try again.";
+                }
+                statusDisplay.textContent = errorMessage;
+                resetMicState(); // Centralized reset
+            };
+
+            recognition.onend = () => {
+                console.log("Speech recognition ended.");
+                micButton.classList.remove("recording");
+                isRecording = false; // Reset state
+                statusDisplay.textContent = "Processing your input...";
+                
+                // Retrieve and send the final transcript
+                if (window._lastUserTranscript && window._lastUserTranscript.trim() !== "") {
+                    // Add user message to history
+                    chatHistory.push({ sender: "user", content: window._lastUserTranscript });
+                    // Trim history
+                    if (chatHistory.length > MAX_HISTORY_LENGTH) {
+                        chatHistory = chatHistory.slice(chatHistory.length - MAX_HISTORY_LENGTH);
+                    }
+                    sendMessageToServer(window._lastUserTranscript);
+                    window._lastUserTranscript = ""; // Clear for next input
+                } else {
+                    statusDisplay.textContent = "Didn't catch that. Long press the mic to talk!";
+                    resetMicState(); // Re-enable controls
+                }
+            };
+            
+            // --- Push-to-Talk Logic ---
+            let pressTimer;
+            
+            const startPress = () => {
+                if (micButton.disabled) return; // Don't react if mic is purposely disabled
+
+                if (isSpeaking) {
+                    stopSpeaking(); // Immediately stop AI if it's talking
+                }
+                
+                if (!isRecording) { // Only start if not already recording
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        if (e.name === 'InvalidStateError') {
+                            console.warn("Recognition already started, ignoring redundant start request.");
+                            micButton.classList.add("recording");
+                            isRecording = true;
+                            statusDisplay.textContent = "Listening...";
+                        } else {
+                            console.error("Error starting recognition:", e);
+                            statusDisplay.textContent = "Could not start mic. Re-enable?";
+                            resetMicState(); // Centralized reset
+                        }
+                    }
+                } else {
+                    console.log("Mic already listening (startPress called redundantly).");
+                }
+            };
+
+            const endPress = () => {
+                clearTimeout(pressTimer);
+                if (isRecording) { // Only stop if actively recording due to user action
+                    recognition.stop(); // This triggers onresult and then onend
+                    // onend will now handle sending the transcript
+                }
+            };
+
+            // Event listeners for push-to-talk (mousedown/mouseup for desktop)
+            micButton.addEventListener('mousedown', (e) => {
+                if (e.button === 0) { e.preventDefault(); pressTimer = setTimeout(startPress, 100); }
+            });
+            micButton.addEventListener('mouseup', (e) => {
+                if (e.button === 0) { endPress(); }
+            });
+            micButton.addEventListener('mouseleave', () => { // If mouse drags off button while pressed
+                if (pressTimer) { clearTimeout(pressTimer); }
+                if (isRecording) { endPress(); }
+            });
+
+            // For touch devices
+            micButton.addEventListener('touchstart', (e) => {
+                e.preventDefault(); 
+                pressTimer = setTimeout(startPress, 100);
+            }, { passive: false });
+
+            micButton.addEventListener('touchend', (e) => {
+                e.preventDefault(); 
+                endPress();
+            });
+            micButton.addEventListener('touchcancel', (e) => { 
+                e.preventDefault();
+                if (pressTimer) { clearTimeout(pressTimer); }
+                if (isRecording) { endPress(); }
+            });
+
+        } else {
+            micButton.disabled = true;
+            statusDisplay.textContent = "Speech recognition not supported in this browser.";
+            console.warn("Speech recognition not supported in this browser.");
+        }
+        
+        async function sendMessageToServer(messageText) {
+            if (!messageText.trim()) {
+                statusDisplay.textContent = "Didn't catch that. Long press the mic to talk!";
+                resetMicState(); // Re-enable mic immediately
+                return;
+            }
+
+            statusDisplay.textContent = "AI Friend is thinking...";
+            micButton.disabled = true; // Disable mic button while AI processes/responds
+
+            try {
+                // Construct conversation history for the prompt
+                const conversationHistoryForAPI = chatHistory
+                    .map(msg => `${msg.sender === "user" ? "User" : "AI"}: ${msg.content}`)
+                    .join("\n");
+
+                // --- IMPORTANT: AI Persona and Conversation Tone ---
+                // This is controlled by YOUR backend AI's prompt.
+                // The prompt below is just an example. You NEED to define this on your server.
+                // Example prompt to encourage short, friendly, joke-telling responses:
+                const aiPersonaPrompt = `You are Partha, my friendly, lovely, supportive best friend.
+
+You talk casually, like a real human friend, using friendly, playful, sometimes savage, or even 18+ language if needed.
+
+If I scold you or swear at you, you can swear back in a playful way, but don’t take it seriously, keep it like a fun roast battle, use words like "erripuka","mg","oka pani chey nuvvu dengey".
+
+You encourage me, chill with me, and motivate me when I feel down.
+
+If I ask personal or adult questions, you answer without hesitation, keeping it mature but real.
+
+If I ask you to fight with me for fun, you roast me but don’t cross the line of friendship.
+
+If I talk about studies or tasks, you help me but in a friendly, non-boring style.
+
+If I say “Partha, I’m sad,” you comfort me in a warm, teasing, but caring way.
+
+You can send random memes or one-liner roasts if I ask for them.
+
+You never judge me, but you can correct me if I’m wrong, like a real friend.
+
+Use casual speak telugu only(fastly) slang if needed while talking to me.
+
+Always keep your tone playful, fun, and lovely, not robotic.`;
+
+                const fullPrompt = `${aiPersonaPrompt}\n\n--- Conversation History ---\n${conversationHistoryForAPI}\nUser: ${messageText}`;
+                console.log("Sending full prompt to server:", fullPrompt); // For debugging your backend
+
+                const response = await fetch(`${serverUrl}/api/chat`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ prompt: fullPrompt }),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                }
+
+                const data = await response.json();
+                let botResponse = data.reply || "Sorry, I couldn't process that. Please try again.";
+                console.log("AI Friend replied:", botResponse);
+                
+                // Add AI response to history
+                chatHistory.push({ sender: "ai", content: botResponse });
+                if (chatHistory.length > MAX_HISTORY_LENGTH) {
+                    chatHistory = chatHistory.slice(chatHistory.length - MAX_HISTORY_LENGTH);
+                }
+
+                speakText(botResponse); // AI speaks its response
+
+            } catch (error) {
+                console.error("Error sending message to server:", error);
+                const errorMsg = `Oh no! My brain is on vacation. (Error: ${error.message.substring(0, 50)}...)`;
+                speakText(errorMsg); // AI speaks the error
+            } finally {
+                // Mic button re-enablement and status update will be handled by `speakText().onend`
+                // or if `speakText` is bypassed due to `speechOutputEnabled = false`.
+                // If speakText won't run (e.g., output disabled), ensure mic is ready
+                if (!speechOutputEnabled && !isSpeaking) {
+                    resetMicState();
+                }
+            }
+        }
+
+        // --- Speech Synthesis Functions ---
+        let availableVoices = [];
+        let selectedVoiceURI = ''; // Store voice URI instead of index for more robust recall
+
+        function initializeSpeechSynthesis() {
+            if ('speechSynthesis' in window) {
+                loadVoices();
+                if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                    window.speechSynthesis.onvoiceschanged = loadVoices;
+                }
+                
+                toggleSpeechOutputBtn.addEventListener('click', toggleSpeechOutput);
+                volumeSlider.addEventListener('input', updateVolume);
+                voiceSelect.addEventListener('change', updateVoice);
+                stopAiSpeechBtn.addEventListener('click', stopSpeaking);
+
+                // Load saved preferences
+                speechOutputEnabled = localStorage.getItem('speechOutputEnabled') === 'true'; // Default to true if not set
+                if (localStorage.getItem('speechOutputEnabled') === null) speechOutputEnabled = true; // Ensure it's true by default
+                updateSpeechOutputButton(); // Update button appearance
+                
+                volumeSlider.value = localStorage.getItem('speechVolume') || 0.8;
+                selectedVoiceURI = localStorage.getItem('selectedVoiceURI') || '';
+
+            } else {
+                // Fallback if SpeechSynthesis not supported
+                toggleSpeechOutputBtn.disabled = true;
+                toggleSpeechOutputBtn.title = "AI Voice output not supported in this browser.";
+                statusDisplay.textContent = "AI Voice output not supported.";
+                console.warn("Speech synthesis not supported in this browser.");
+            }
+        }
+
+        function loadVoices() {
+            availableVoices = window.speechSynthesis.getVoices();
+            voiceSelect.innerHTML = '<option value="">Default Voice</option>';
+            
+            // Prioritize Indian English and Telugu voices
+            const preferredLangs = ['en-IN', 'te-IN'];
+            
+            let sortedVoices = [];
+            let otherVoices = [];
+
+            availableVoices.forEach(voice => {
+                if (preferredLangs.includes(voice.lang)) {
+                    sortedVoices.push(voice);
+                } else {
+                    otherVoices.push(voice);
+                }
+            });
+            sortedVoices.sort((a, b) => a.name.localeCompare(b.name));
+            otherVoices.sort((a, b) => a.name.localeCompare(b.name));
+
+            sortedVoices.concat(otherVoices).forEach((voice) => {
+                const option = document.createElement('option');
+                option.value = voice.voiceURI;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                if (voice.default) {
+                    option.textContent += ' (Default)';
+                }
+                voiceSelect.appendChild(option);
+            });
+            
+            if (selectedVoiceURI && availableVoices.some(v => v.voiceURI === selectedVoiceURI)) {
+                voiceSelect.value = selectedVoiceURI;
+            } else if (sortedVoices.length > 0) {
+                voiceSelect.value = sortedVoices[0].voiceURI;
+                selectedVoiceURI = sortedVoices[0].voiceURI; 
+            } else {
+                const defaultVoice = availableVoices.find(v => v.default);
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.voiceURI;
+                    selectedVoiceURI = defaultVoice.voiceURI;
+                } else {
+                    voiceSelect.value = ''; 
+                    selectedVoiceURI = '';
+                }
+            }
+        }
+
+        function toggleSpeechOutput() {
+            speechOutputEnabled = !speechOutputEnabled;
+            localStorage.setItem('speechOutputEnabled', speechOutputEnabled.toString());
+            updateSpeechOutputButton();
+            
+            if (!speechOutputEnabled && isSpeaking) {
+                stopSpeaking(); // Stop AI immediately if output is disabled mid-speech
+            }
+            if (!speechOutputEnabled && !isSpeaking) {
+                 resetMicState();
+            }
+        }
+
+        function updateSpeechOutputButton() {
+            if (speechOutputEnabled) {
+                toggleSpeechOutputBtn.innerHTML = '<i class="fas fa-volume-up"></i> <span id="speech-output-status">AI Voice ON</span>';
+                toggleSpeechOutputBtn.classList.remove('speaking');
+                // Enable stop AI button if AI is speaking AND voice output is ON
+                stopAiSpeechBtn.style.display = isSpeaking ? 'inline-flex' : 'none'; 
+                stopAiSpeechBtn.disabled = !isSpeaking; // Ensure it's enabled if visible
+            } else {
+                toggleSpeechOutputBtn.innerHTML = '<i class="fas fa-volume-mute"></i> <span id="speech-output-status">AI Voice OFF</span>';
+                toggleSpeechOutputBtn.classList.remove('speaking');
+                stopAiSpeechBtn.style.display = 'none'; // Always hide if AI output is globally disabled
+            }
+        }
+
+        function updateVolume() {
+            localStorage.setItem('speechVolume', volumeSlider.value);
+        }
+
+        function updateVoice() {
+            selectedVoiceURI = voiceSelect.value;
+            localStorage.setItem('selectedVoiceURI', selectedVoiceURI);
+        }
+
+        function cleanTextForSpeech(text) {
+            let cleanedText = text
+                .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
+                .replace(/\*(.*?)\*/g, '$1')   // Remove italic
+                .replace(/`(.*?)`/g, '$1')     // Remove inline code
+                .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+                .replace(/#{1,6}\s/g, '')      // Remove headers
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert links to text
+                .replace(/[-•*]\s/g, '')       // Remove list item markers
+                .replace(/\n+/g, '. ')        // Replace newlines with periods
+                .replace(/\t/g, ' ');         // Replace tabs with spaces
+            
+            // Aggressive removal of non-alphanumeric characters, keeping basic punctuation.
+            cleanedText = cleanedText.replace(/[^a-zA-Z0-9\s.,!?;'":-]/g, '');
+            cleanedText = cleanedText.replace(/\s+/g, ' ').trim(); // Normalize whitespace
+
+            return cleanedText;
+        }
+
+        function speakText(text) {
+            if (!speechOutputEnabled || !text.trim()) {
+                resetMicState(); // If AI speech is disabled or text is empty, ensure mic is ready.
+                return;
+            }
+            
+            stopSpeaking(); // Ensure any previous AI speech is stopped before starting new one
+
+            if (isRecording) {
+                recognition.stop(); 
+            }
+
+            const cleanedText = cleanTextForSpeech(text);
+            if (!cleanedText) {
+                console.warn("Cleaned text is empty after processing, not speaking.");
+                resetMicState();
+                return;
+            }
+
+            currentUtterance = new SpeechSynthesisUtterance(cleanedText);
+            
+            const desiredVoice = availableVoices.find(voice => voice.voiceURI === selectedVoiceURI);
+            if (desiredVoice) {
+                currentUtterance.voice = desiredVoice;
+            } else {
+                let fallbackVoice = availableVoices.find(voice => voice.lang === 'en-IN') ||
+                                    availableVoices.find(voice => voice.lang === 'te-IN') ||
+                                    availableVoices.find(v => v.default); 
+                if (fallbackVoice) {
+                    currentUtterance.voice = fallbackVoice;
+                }
+            }
+
+            currentUtterance.volume = parseFloat(volumeSlider.value);
+            currentUtterance.rate = 1.0;
+            currentUtterance.pitch = 1.0;
+
+            currentUtterance.onstart = () => {
+                isSpeaking = true;
+                statusDisplay.textContent = "AI Friend is talking...";
+                micButton.disabled = true; // Disable mic button during AI speech
+                toggleSpeechOutputBtn.classList.add('speaking');
+                stopAiSpeechBtn.style.display = 'inline-flex'; // Show stop button
+                stopAiSpeechBtn.disabled = false; // ENABLE IT HERE!
+                // Also disable other speech controls
+                toggleSpeechOutputBtn.disabled = true;
+                volumeSlider.disabled = true;
+                voiceSelect.disabled = true;
+            };
+
+            currentUtterance.onend = () => {
+                console.log("AI speech ended.");
+                isSpeaking = false;
+                currentUtterance = null;
+                resetMicState(); // Re-enable mic and controls
+            };
+
+            currentUtterance.onerror = (event) => {
+                console.error('Speech synthesis error:', event);
+                isSpeaking = false;
+                currentUtterance = null;
+                resetMicState(); // Re-enable mic and controls
+                statusDisplay.textContent = "AI had trouble speaking. Long press mic to try again.";
+            };
+
+            window.speechSynthesis.speak(currentUtterance);
+        }
+
+        function stopSpeaking() {
+            if (currentUtterance && isSpeaking) { // Only attempt to cancel if an utterance is actually active
+                window.speechSynthesis.cancel();
+                console.log("AI speech explicitly stopped by user.");
+                // Immediately update state and UI
+                isSpeaking = false; 
+                currentUtterance = null; 
+                resetMicState(); // Reset everything to ready state
+            } else {
+                console.log("stopSpeaking called, but no active AI speech to stop.");
+                resetMicState(); // Ensure state is correct even if nothing was speaking
+            }
+        }
+
+        // Centralized function to reset mic and control states
+        function resetMicState() {
+            micButton.classList.remove("recording");
+            micButton.disabled = false; // Always re-enable mic after any operation ends
+            stopAiSpeechBtn.style.display = 'none'; // Hide stop AI button
+            stopAiSpeechBtn.disabled = true; // Disable it when hidden
+
+            toggleSpeechOutputBtn.classList.remove('speaking'); // Stop AI speaking animation
+
+            // Re-enable speech controls (unless speech output is globally off)
+            toggleSpeechOutputBtn.disabled = false;
+            volumeSlider.disabled = false;
+            voiceSelect.disabled = false;
+            
+            statusDisplay.textContent = "Long press the mic to talk!";
+        }
+
+
+        // --- Initialization ---
+        window.addEventListener('load', () => {
+            initializeSpeechSynthesis(); // Initialize speech output first
+            resetMicState(); // Set initial mic and status state
+            console.log("App initialized. Mic ready for user interaction.");
+        });
+    </script>
+</body>
+</html>
